@@ -1,245 +1,163 @@
 import streamlit as st
-import numpy as np
 import matplotlib.pyplot as plt
-import time
+import numpy as np
 
-# Page Config
-st.set_page_config(page_title="Chaos Dashboard", layout="wide")
+# --- IMPORT THE NEW ENGINES ---
+# If this fails, make sure you created 'simulations/__init__.py'
+from simulations import fractal
+from simulations import polymer
 
-# Sidebar
-st.sidebar.title("🎛️ Controls")
-app_mode = st.sidebar.selectbox("Choose Simulation", ["Home", "Random Walk", "Mandelbrot", "Polymer Simulator"])
+# 1. Page Config
+st.set_page_config(page_title="Stochastic Physics", layout="wide")
 
-if app_mode == "Home":
-    st.title("The Chaos Dashboard")
-    st.write("### Status: Online 🟢")
-    st.write("Welcome back, Alex. The physics engine is ready.")
-    st.write("Select a simulation from the sidebar to begin.")
+# 2. Sidebar Navigation
+st.sidebar.title("Physics Dashboard")
+app_mode = st.sidebar.selectbox("Choose Simulation", 
+    ["Mandelbrot Explorer", "Polymer Simulator"])
 
-elif app_mode == "Random Walk":
-    st.title("Brownian Motion Generator")
-    
-    # User Inputs
-    steps = st.sidebar.slider("Number of Steps", 100, 10000, 1000)
-    
-    if st.button("Generate Walk"):
-        # The Math
-        x = np.cumsum(np.random.randn(steps))
-        y = np.cumsum(np.random.randn(steps))
-        
-        # The Plot
-        fig, ax = plt.subplots()
-        ax.plot(x, y, alpha=0.7, linewidth=0.8)
-        ax.set_title(f"Random Walk ({steps} steps)")
-        
-        # The Streamlit Magic
-        st.pyplot(fig)
-        st.success(f"Generated walk with {steps} steps.")
+# --- MODE 1: FRACTALS (The Chaos Engine) ---
+if app_mode == "Mandelbrot Explorer":
+    st.title("The Mandelbrot Set")
+    st.markdown("Explore the boundary of the complex plane.")
 
-elif app_mode == "Mandelbrot":
-    st.title("Mandelbrot Set Explorer")
-    
-    # 1. Navigation Controls
-    st.sidebar.markdown("---")
-    st.sidebar.header("Navigation")
-    center_x = st.sidebar.number_input("Center X", value=-0.5, step=0.1, format="%.5f")
-    center_y = st.sidebar.number_input("Center Y", value=0.0, step=0.1, format="%.5f")
-    zoom = st.sidebar.number_input("Zoom Multiplier", min_value=1.0, value=1.0, step=1.0)
-    
-    # 2. Render Settings
-    st.sidebar.header("Render Settings")
-    iterations = st.sidebar.slider("Complexity (Iterations)", 10, 1000, 100)
-    res_multiplier = st.sidebar.slider("Resolution Scale", 0.5, 3.0, 1.0, step=0.5)
-    
-    # 3. The Logic
-    def get_fractal(max_iter, zoom_factor, cx, cy, res_mult):
-        # Calculate pixel grid size based on resolution slider
-        w = int(800 * res_mult)
-        h = int(600 * res_mult)
-        
-        # Calculate viewport boundaries based on zoom and center
-        x_width = 4.0 / zoom_factor
-        y_height = 3.0 / zoom_factor
-        
-        x_min, x_max = cx - x_width/2, cx + x_width/2
-        y_min, y_max = cy - y_height/2, cy + y_height/2
-        
-        # Generate the complex grid
-        y, x = np.ogrid[y_min:y_max:h*1j, x_min:x_max:w*1j]
-        c = x + y*1j
-        z = c
-        divtime = max_iter + np.zeros(z.shape, dtype=int)
-
-        # The Iteration Loop
-        for i in range(max_iter):
-            z = z**2 + c
-            diverge = z*np.conj(z) > 2**2            
-            div_now = diverge & (divtime == max_iter) 
-            divtime[div_now] = i                     
-            z[diverge] = 2                           
-
-        return divtime
-
-    # 4. The Render (Fixed: Dedented to run OUTSIDE the function)
-    if st.button("Generate Fractal"):
-        with st.spinner("Calculating..."):
-            # Generate the image data
-            fractal_data = get_fractal(iterations, zoom, center_x, center_y, res_multiplier)
-            
-            # Plot using Matplotlib
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.imshow(fractal_data, cmap='inferno')
-            ax.axis("off") 
-            st.pyplot(fig)
-
-elif app_mode == "Polymer Simulator":
-    st.title("Polymer Chain Physics")
-    # FIXED: Added 'r' before the string to treat backslashes as raw text
-    st.markdown(r"""
-    **The Science:** A "Real" polymer cannot occupy the same space twice (Excluded Volume). 
-    * **Good Solvent:** The chain is "stiff" and expands to maximize surface area ($R \approx N^{0.6}$).
-    * **Bad Solvent:** The chain is "sticky" and clumps together locally ($R \approx N^{0.33}$).
-    """)
-
-    # 1. Configuration
+    # UI Controls
     col1, col2 = st.columns(2)
     with col1:
-        # Increased max N to 5000 for better stats
+        # Increase the max to 2000 for cleaner edges
+        max_iter = st.slider("Precision (Iterations)", 50, 2000, 100)
+        zoom = st.slider("Zoom Level", 1.0, 1000.0, 1.0)
+    with col2:
+        pan_x = st.number_input("Pan X", value=-0.75, step=0.05, format="%.6f")
+        pan_y = st.number_input("Pan Y", value=0.1, step=0.05, format="%.6f")
+        
+    # NEW SLIDER: Resolution Quality
+    quality = st.select_slider("Image Quality", options=["Low (Fast)", "Medium", "High (Slow)", "Ultra (4K)"], value="Medium")
+    
+    # Map quality to pixels
+    res_map = {"Low (Fast)": 400, "Medium": 800, "High (Slow)": 1200, "Ultra (4K)": 2000}
+    w = h = res_map[quality]
+        
+    # Viewport Math (UI Logic only - mapping screen to complex plane)
+    x_width = 3.0 / zoom
+    y_height = 3.0 / zoom
+    xmin, xmax = pan_x - x_width/2, pan_x + x_width/2
+    ymin, ymax = pan_y - y_height/2, pan_y + y_height/2
+
+    if st.button("Generate Fractal"):
+        with st.spinner("Computing chaos..."):
+            # 1. Run the Engine
+            img = fractal.generate_mandelbrot(xmin, xmax, ymin, ymax, w, h, max_iter)
+            
+            # --- NEW DISPLAY LOGIC ---
+            
+            # 2. Color Mapping (Manual)
+            # We map the raw iteration counts (integers) to colors (RGBA) directly.
+            # This bypasses Matplotlib's "Figure" overhead.
+            
+            # Normalize to 0.0 - 1.0
+            norm_img = img / max_iter 
+            
+            # Apply the colormap (returns a [Width, Height, 4] array)
+            cmap = plt.get_cmap('hot')
+            colored_img = cmap(norm_img)
+            
+            # 3. Display raw pixels
+            # 'use_column_width=False' ensures it doesn't get squished.
+            # You will see a scrollbar if the image is wider than the screen.
+            st.image(colored_img, caption=f"Resolution: {w}x{h}", use_container_width=False)
+
+# --- MODE 2: POLYMERS (The Stochastic Engine) ---
+elif app_mode == "Polymer Simulator":
+    st.title("Polymer Chain Physics")
+    st.markdown(r"""
+    **The Physics of Scaling Laws ($R \sim N^{\nu}$):**
+    
+    * **🟢 Good Solvent (Swollen):** Monomers repel each other. The chain swells to maximize entropy.
+        $$R \approx N^{3/5} \approx N^{0.588}$$
+    
+    * **🟡 Theta Solvent (Ideal):** Repulsion exactly balances attraction. Behaves like a pure Random Walk.
+        $$R \approx N^{1/2} = N^{0.500}$$
+    
+    * **🔴 Bad Solvent (Collapsed):** Monomers attract each other. The chain collapses into a dense globule.
+        $$R \approx N^{1/3} \approx N^{0.333}$$
+    """)
+
+    # UI Controls
+    col1, col2 = st.columns(2)
+    with col1:
         N = st.slider("Number of Monomers (N)", 100, 5000, 1000) 
         step_size = st.slider("Kuhn Length (b)", 0.1, 5.0, 1.0)
     with col2:
-        solvent = st.selectbox("Solvent Quality", ["Theta Solvent (Ideal)", "Good Solvent (Swollen)", "Bad Solvent (Collapsed)"])
+        solvent = st.selectbox("Solvent Quality", [
+            "Theta Solvent (Ideal)", 
+            "Good Solvent (Swollen)", 
+            "Bad Solvent (Collapsed)"
+        ])
         
-    with st.expander("Realism Settings", expanded=True):
-        excluded_vol = st.checkbox("Enable Excluded Volume (Self-Avoiding Walk)", value=True)
-        st.caption("Note: 'Bad Solvent' needs this OFF to collapse fully. 'Good Solvent' needs this ON to swell.")
+    use_saw = st.checkbox("Enable Excluded Volume (SAW)", value=True)
 
-    # 2. The Physics Engine (Final "Pearl Necklace" Logic)
-    def generate_polymer(N, step_size, solvent_type, use_saw):
-        x = np.zeros(N)
-        y = np.zeros(N)
-        z = np.zeros(N)
-        
-        # Scaling factors
-        scaling = 1.0
-        if solvent_type == "Good Solvent (Swollen)":
-            scaling = 1.0 
-        elif solvent_type == "Bad Solvent (Collapsed)":
-            scaling = 0.8 
-
-        for i in range(1, N):
-            # Try to find a valid step
-            max_retries = 50 if use_saw else 1 # Increased retries to avoid "giving up"
-            best_x, best_y, best_z = x[i-1], y[i-1], z[i-1]
-            
-            for attempt in range(max_retries):
-                # 1. Generate Raw Step (Random Direction)
-                theta = np.random.uniform(0, 2*np.pi)
-                phi = np.random.uniform(0, np.pi)
-                
-                dx = step_size * np.sin(phi) * np.cos(theta) * scaling
-                dy = step_size * np.sin(phi) * np.sin(theta) * scaling
-                dz = step_size * np.cos(phi) * scaling
-                
-                # 2. Apply Solvent Physics (TO EVERY ATTEMPT)
-                
-                # GOOD SOLVENT: Geometric Stiffness
-                if solvent_type == "Good Solvent (Swollen)" and i > 1:
-                    prev_dx = x[i-1] - x[i-2]
-                    prev_dy = y[i-1] - y[i-2]
-                    prev_dz = z[i-1] - z[i-2]
-                    
-                    # Add Bias (Strength 1.0)
-                    dx += prev_dx * 1.0
-                    dy += prev_dy * 1.0
-                    dz += prev_dz * 1.0
-                    
-                    # Renormalize to ensure length is exactly 'step_size'
-                    current_len = np.sqrt(dx**2 + dy**2 + dz**2)
-                    dx = (dx / current_len) * step_size
-                    dy = (dy / current_len) * step_size
-                    dz = (dz / current_len) * step_size
-
-                # BAD SOLVENT: Local Attraction
-                elif solvent_type == "Bad Solvent (Collapsed)" and i > 100:
-                    start_node = max(0, i-100)
-                    local_cm_x = np.mean(x[start_node:i])
-                    local_cm_y = np.mean(y[start_node:i])
-                    local_cm_z = np.mean(z[start_node:i])
-                    
-                    dx += (local_cm_x - x[i-1]) * 0.2
-                    dy += (local_cm_y - y[i-1]) * 0.2
-                    dz += (local_cm_z - z[i-1]) * 0.2
-                    
-                    # Renormalize
-                    current_len = np.sqrt(dx**2 + dy**2 + dz**2)
-                    if current_len > 0:
-                        dx = (dx / current_len) * step_size * scaling
-                        dy = (dy / current_len) * step_size * scaling
-                        dz = (dz / current_len) * step_size * scaling
-
-                # 3. Candidate Position
-                cand_x = x[i-1] + dx
-                cand_y = y[i-1] + dy
-                cand_z = z[i-1] + dz
-                
-                # Save as fallback
-                best_x, best_y, best_z = cand_x, cand_y, cand_z
-
-                # 4. Excluded Volume Check (SAW)
-                if use_saw:
-                    # Check ALL previous atoms
-                    dists = (x[:i] - cand_x)**2 + (y[:i] - cand_y)**2 + (z[:i] - cand_z)**2
-                    if np.min(dists) >= (step_size * 0.8)**2:
-                        break # Valid step found!
-            
-            # Commit
-            x[i], y[i], z[i] = best_x, best_y, best_z
-            
-        return x, y, z
-
-    # 3. Computation & Metrics
     if st.button("Synthesize Polymer"):
         with st.spinner("Simulating molecular dynamics..."):
-            x, y, z = generate_polymer(N, step_size, solvent, excluded_vol)
+            # 1. Generate Raw Data
+            x, y, z = polymer.generate_polymer(N, step_size, solvent, use_saw)
             
-            # Metrics
-            r_end = np.sqrt((x[-1]-x[0])**2 + (y[-1]-y[0])**2 + (z[-1]-z[0])**2)
+            # 2. Physics Analysis (Standard Metrics)
+            metrics = polymer.analyze_chain(x, y, z)
             
-            cm_x, cm_y, cm_z = np.mean(x), np.mean(y), np.mean(z)
-            rg_sq = np.mean((x-cm_x)**2 + (y-cm_y)**2 + (z-cm_z)**2)
-            rg = np.sqrt(rg_sq)
+            # Unpack the dictionary for easier use
+            r_end = metrics["end_to_end"]
+            rg = metrics["radius_of_gyration"]
+            cx, cy, cz = metrics["center_of_mass"]
             
-            c1, c2, c3 = st.columns(3)
-            c1.metric("End-to-End Distance", f"{r_end:.2f}")
+            # 3. Scaling Analysis (The Restored Feature)
+            # Calculate the specific exponent for THIS chain using the formula: nu = log(R/b) / log(N)
+            measured_nu = np.log(r_end / step_size) / np.log(N)
+
+            # ... (after calculating measured_nu) ...
+
+            # 4. Determine Theoretical Limit based on User Selection
+            if "Good" in solvent:
+                theoretical_nu = 0.588  # Flory exponent for 3D SAW
+                solvent_type = "Swollen"
+            elif "Bad" in solvent:
+                theoretical_nu = 0.333  # 1/3 for collapsed sphere
+                solvent_type = "Globule"
+            else:
+                theoretical_nu = 0.500  # 1/2 for random walk
+                solvent_type = "Ideal"
+
+            # --- DISPLAY METRICS (Now with 4 Columns) ---
+            c1, c2, c3, c4 = st.columns(4)
+            
+            c1.metric("End-to-End", f"{r_end:.2f}")
             c2.metric("Radius of Gyration", f"{rg:.2f}")
             
-            # Flory Exponent
-            if r_end > 0:
-                exponent = np.log(r_end / step_size) / np.log(N)
-            else:
-                exponent = 0.0
-            c3.metric("Flory Exponent (ν)", f"{exponent:.3f}")
-
-            # 4. Visualization (Refined)
+            # The Comparison
+            c3.metric("Measured ν", f"{measured_nu:.3f}")
+            c4.metric("Theoretical ν", f"{theoretical_nu:.3f}", help="The expected scaling for this solvent type")
+            
+            # --- VISUALIZATION ---
             fig = plt.figure(figsize=(10, 8))
             ax = fig.add_subplot(111, projection='3d')
             
-            # Main Chain: Smaller dots (s=2) for high N
-            ax.scatter(x, y, z, c=np.arange(N), cmap='cool', s=2, alpha=0.6, edgecolors='none')
-            
-            # Thin line to show connectivity
+            # Plot the chain (Rainbow color by index)
+            ax.scatter(x, y, z, c=np.arange(N), cmap='cool', s=2, alpha=0.6)
             ax.plot(x, y, z, alpha=0.2, color='white', lw=0.5)
             
-            # Markers: Slightly smaller (s=50)
-            ax.scatter(x[0], y[0], z[0], color='lime', s=50, label='Start', edgecolors='white')
-            ax.scatter(x[-1], y[-1], z[-1], color='red', s=50, label='End', edgecolors='white')
+            # MARKERS
+            # Start (Green)
+            ax.scatter(x[0], y[0], z[0], color='lime', s=100, label='Start', edgecolors='black')
+            # End (Red)
+            ax.scatter(x[-1], y[-1], z[-1], color='red', s=100, label='End', edgecolors='black')
+            # Center of Mass (Gold Star)
+            ax.scatter(cx, cy, cz, color='gold', s=200, marker='*', label='Center of Mass', edgecolors='black')
             
-            # Center of Mass
-            ax.scatter(cm_x, cm_y, cm_z, color='yellow', marker='x', s=50, label='Center of Mass')
-
+            # STYLING (The Void)
             ax.set_facecolor('#0E1117') 
-            ax.grid(False) 
-            ax.axis('off') 
-            ax.legend()
+            ax.axis('off')
+            ax.grid(False)
+            
+            # Legend
+            ax.legend(facecolor='#0E1117', labelcolor='white')
+            
             st.pyplot(fig)
