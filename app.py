@@ -6,6 +6,7 @@ import numpy as np
 # If this fails, make sure you created 'simulations/__init__.py'
 from simulations import fractal
 from simulations import polymer
+from simulations import gravity 
 
 # 1. Page Config
 st.set_page_config(page_title="Stochastic Physics", layout="wide")
@@ -13,7 +14,7 @@ st.set_page_config(page_title="Stochastic Physics", layout="wide")
 # 2. Sidebar Navigation
 st.sidebar.title("Physics Dashboard")
 app_mode = st.sidebar.selectbox("Choose Simulation", 
-    ["Mandelbrot Explorer", "Polymer Simulator"])
+    ["Mandelbrot Explorer", "Polymer Simulator", "Three-Body Gravitation"])
 
 # --- MODE 1: FRACTALS (The Chaos Engine) ---
 if app_mode == "Mandelbrot Explorer":
@@ -161,3 +162,273 @@ elif app_mode == "Polymer Simulator":
             ax.legend(facecolor='#0E1117', labelcolor='white')
             
             st.pyplot(fig)
+# --- MODE 3: THE THREE-BODY PROBLEM ---
+elif app_mode == "Three-Body Gravitation":
+    st.title("Three-Body Orbital Mechanics")
+    st.markdown("A brute-force numerical integration of Newton's Law of Universal Gravitation.")
+
+    # --- PRESETS DICTIONARY ---
+    presets = {
+        "Default (Randomized Slingshot)": [
+            1.0, 1.0, 1.0,  # Masses (m1, m2, m3)
+            -1.0, 0.0, 0.0,  1.0, 0.0, 0.0,  0.0, 1.0, 0.0, # Positions (x,y,z) x 3
+            0.0, -0.5, 0.0,  0.0, 0.5, 0.0,  0.5, 0.0, 0.0  # Velocities (vx,vy,vz) x 3
+        ],
+        "The Figure-8 (Stable)": [
+            1.0, 1.0, 1.0, 
+            0.97000436, -0.24308753, 0.0,  -0.97000436, 0.24308753, 0.0,  0.0, 0.0, 0.0,
+            -0.46620368, -0.43236573, 0.0,  -0.46620368, -0.43236573, 0.0,  0.93240737, 0.86473146, 0.0
+        ]
+    }
+
+    # --- SESSION STATE MANAGEMENT ---
+    # We initialize a flat list of 21 keys for our grid
+    keys = ["m1","m2","m3", "x1","y1","z1","x2","y2","z2","x3","y3","z3", "vx1","vy1","vz1","vx2","vy2","vz2","vx3","vy3","vz3"]
+    
+    # If the user hasn't loaded the page yet, give them the default numbers
+    if "gravity_state" not in st.session_state:
+        st.session_state.gravity_state = presets["Default (Randomized Slingshot)"]
+
+    def load_preset():
+        """Callback to overwrite the vault and force-update individual widget keys"""
+        choice = st.session_state.preset_choice
+        new_values = presets[choice]
+        
+        # 1. Update the master state (for consistency)
+        st.session_state.gravity_state = new_values.copy()
+        
+        # 2. Extract the data chunks
+        masses = new_values[0:3]
+        pos = new_values[3:12]
+        vel = new_values[12:21]
+        
+        # 3. Overwrite the specific keys for all 3 bodies
+        for i in range(3):
+            st.session_state[f"m_{i}"] = float(masses[i])
+            
+            st.session_state[f"x_{i}"] = float(pos[i*3])
+            st.session_state[f"y_{i}"] = float(pos[i*3+1])
+            st.session_state[f"z_{i}"] = float(pos[i*3+2])
+            
+            st.session_state[f"vx_{i}"] = float(vel[i*3])
+            st.session_state[f"vy_{i}"] = float(vel[i*3+1])
+            st.session_state[f"vz_{i}"] = float(vel[i*3+2])
+    def generate_random_state():
+        """Generates random coordinates and injects them into the session state vault"""
+        import numpy as np
+        v_mult = st.session_state.v_scale # Grab the velocity multiplier from the slider
+        
+        for i in range(3):
+            # Masses: Strictly positive (0.5 to 2.5)
+            st.session_state[f"m_{i}"] = float(np.random.uniform(0.5, 2.5))
+            
+            # Positions: Between -2.0 and 2.0
+            st.session_state[f"x_{i}"] = float(np.random.uniform(-2.0, 2.0))
+            st.session_state[f"y_{i}"] = float(np.random.uniform(-2.0, 2.0))
+            st.session_state[f"z_{i}"] = float(np.random.uniform(-2.0, 2.0))
+            
+            # Velocities: Slower to prevent instant ejections (-0.1 to 0.1)
+            st.session_state[f"vx_{i}"] = float(np.random.uniform(-0.1, 0.1)) 
+            st.session_state[f"vy_{i}"] = float(np.random.uniform(-0.1, 0.1)) 
+            st.session_state[f"vz_{i}"] = float(np.random.uniform(-0.1, 0.1))
+    def adjust_v_plus():
+        st.session_state.v_scale = round(min(2.0, st.session_state.v_scale + 0.01), 2)
+
+    def adjust_v_minus():
+        st.session_state.v_scale = round(max(0.0, st.session_state.v_scale - 0.01), 2)        
+    
+# --- TOP UI: PRESETS, RANDOMIZER, ENERGY & TIME ---
+# max_render_points: How many dots to actually draw on the screen
+    max_render_points = st.sidebar.select_slider(
+        "Visual Resolution", 
+        options=[500, 1000, 2500, 5000], 
+        value=1000,
+        help="Higher resolution shows more detail but can lag the 3D view."
+)
+# num_steps: Total number of data points to calculate
+    num_steps = st.sidebar.slider("Calculation Steps", 500, 10000, 2000, step=500)
+# steps_per_day: How many snapshots to take per 24 hours of simulation
+    steps_per_day = st.sidebar.slider("Snapshots per Day", 50, 1000, 200, step=50)
+#trail size: How many of those snapshots to show in the trail    
+    trail_size = st.slider("Trail Length (points)", 5, num_steps, 500, key="trail_len")
+    colA, colB, colC, colD, colE = st.columns([2, 1, 1, 1, 1]) # Extra column for epsilon
+    with colA:
+        st.selectbox("Load Initial Conditions", list(presets.keys()), key="preset_choice", on_change=load_preset)
+    with colB:
+        st.button("🎲 Randomize", on_click=generate_random_state, use_container_width=True)
+    with colC:
+        st.write("Velocity Multiplier")
+        # Create a mini-grid for the buttons and slider
+        v_col1, v_col2, v_col3 = st.columns([1, 3, 1])
+        
+        with v_col1:
+            st.button("➖", on_click=adjust_v_minus, use_container_width=True)
+        
+        with v_col2:
+            # We remove the label here since we wrote it above to save space
+            st.slider("v_slider", 0.0, 2.0, key="v_scale", label_visibility="collapsed")
+        
+        with v_col3:
+            st.button("➕", on_click=adjust_v_plus, use_container_width=True)
+    with colD:
+        t_max = st.slider("Simulation Time (Days)", 1, 100, 10)
+    with colE: # New column for epsilon
+        epsilon = st.slider(
+            "Softening Factor (ε)", 
+            min_value=1e-8, 
+            max_value=1.0,    # Increased max so you can actually feel the "squishiness"
+            value=1e-4,       # Start at a visible value
+            step=1e-5,        # Explicitly set the step size
+            format="%.2e",    # Use scientific notation to see the precision
+            key="epsilon"
+)
+            
+    # --- THE 7x3 COCKPIT GRID ---
+    state = st.session_state.gravity_state # Grab current numbers
+    
+    # Create 3 columns for the 3 bodies
+    cols = st.columns(3)
+    bodies = ["Body 1 (Red)", "Body 2 (Blue)", "Body 3 (Green)"]
+    
+    # We loop to build the 21 inputs cleanly without writing 21 lines of code!
+    new_state = []
+    idx = 0
+    
+    # Extract data for looping
+    masses = state[0:3]
+    pos = state[3:12]
+    vel = state[12:21]
+
+    for i in range(3):
+        with cols[i]:
+            st.markdown(f"**{bodies[i]}**")
+            m = st.number_input("Mass", key=f"m_{i}", format="%.8f")
+            
+            st.caption("Position (x, y, z)")
+            x = st.number_input("X", key=f"x_{i}", format="%.8f")
+            y = st.number_input("Y", key=f"y_{i}", format="%.8f")
+            z = st.number_input("Z", key=f"z_{i}", format="%.8f")
+            
+            st.caption("Velocity (vx, vy, vz)")
+            vx = st.number_input("Vx", key=f"vx_{i}", format="%.8f")
+            vy = st.number_input("Vy", key=f"vy_{i}", format="%.8f")
+            vz = st.number_input("Vz", key=f"vz_{i}", format="%.8f")
+            
+            # Store the user's current inputs back into a list
+            new_state.append((m, x, y, z, vx, vy, vz))
+
+# Grab the live slider value
+    current_v_scale = st.session_state.v_scale
+# Extract masses
+    user_masses = [new_state[0][0], new_state[1][0], new_state[2][0]]
+    # Re-pack with the velocity throttle applied!
+    user_initial_state = [
+        new_state[0][1], new_state[0][2], new_state[0][3],  # Pos 1
+        new_state[1][1], new_state[1][2], new_state[1][3],  # Pos 2
+        new_state[2][1], new_state[2][2], new_state[2][3],  # Pos 3
+        new_state[0][4] * current_v_scale, new_state[0][5] * current_v_scale, new_state[0][6] * current_v_scale,  # Vel 1
+        new_state[1][4] * current_v_scale, new_state[1][5] * current_v_scale, new_state[1][6] * current_v_scale,  # Vel 2
+        new_state[2][4] * current_v_scale, new_state[2][5] * current_v_scale, new_state[2][6] * current_v_scale   # Vel 3
+    ]
+
+# --- EXECUTE ENGINE ---
+    if st.button("Calculate Orbits", type="primary", use_container_width=True):
+        with st.spinner("Crunching the numbers..."):
+            
+            # 1. Define resolution
+            num_steps_sim = int(t_max * steps_per_day)
+            
+            # 2. RUN SIMULATION
+            # Note: Ensure gravity.simulate_orbit returns (solution, time_steps)
+            solution, time_steps = gravity.simulate_orbit(
+                user_initial_state, t_max, num_steps_sim, user_masses, epsilon
+            )
+            
+            total_energy = gravity.calculate_energy(solution, user_masses, epsilon)
+
+            # --- OPTIMIZED VISUALIZATION ---
+            import plotly.graph_objects as go
+            
+            points_per_day = num_steps_sim / t_max
+            actual_trail_size = int(trail_size * points_per_day)
+            start_idx = max(0, num_steps_sim - actual_trail_size)
+
+            # Define render_step ONCE here so it's available for both charts
+            render_step = max(1, actual_trail_size // max_render_points)
+
+            fig = go.Figure()
+            colors = ['red', 'cyan', 'lime']
+            
+            for i in range(3):
+                idx = i * 3
+                x = solution[start_idx::render_step, idx]
+                y = solution[start_idx::render_step, idx + 1]
+                z = solution[start_idx::render_step, idx + 2]
+                
+                fig.add_trace(go.Scatter3d(
+                    x=x, y=y, z=z,
+                    mode='lines',
+                    line=dict(width=3, color=colors[i]),
+                    name=f'Body {i+1}'
+                ))
+                
+                fig.add_trace(go.Scatter3d(
+                    x=[solution[-1, idx]], y=[solution[-1, idx+1]], z=[solution[-1, idx+2]],
+                    mode='markers',
+                    marker=dict(size=6, color=colors[i]),
+                    showlegend=False
+                ))
+
+            fig.update_layout(
+                template="plotly_dark",
+                margin=dict(l=0, r=0, b=0, t=0),
+                scene=dict(aspectmode='cube'),
+                hovermode=False
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # --- TIME-INDEXED ENERGY CHART ---
+            st.divider()
+            st.subheader("🚀 System Stability (Total Energy)")
+            
+            energy_data = {
+                "Time (Days)": time_steps[::render_step],
+                "Total Energy": total_energy[::render_step]
+            }
+            st.line_chart(energy_data, x="Time (Days)", y="Total Energy")
+
+            # --- SIMULATION LOG & COLLISION DETECTOR ---
+            # Now acting as the final "Diagnostic Footer"
+            st.divider()
+            st.subheader("📡 Simulation Log")
+            
+            pos1 = solution[:, 0:3]
+            pos2 = solution[:, 3:6]
+            pos3 = solution[:, 6:9]
+
+            dist12 = np.linalg.norm(pos1 - pos2, axis=1)
+            dist13 = np.linalg.norm(pos1 - pos3, axis=1)
+            dist23 = np.linalg.norm(pos2 - pos3, axis=1)
+
+            min12, min13, min23 = np.min(dist12), np.min(dist13), np.min(dist23)
+            overall_min = min(min12, min13, min23)
+
+            if overall_min == min12:
+                min_idx = np.argmin(dist12)
+                pair = "Body 1 (Red) & Body 2 (Cyan)"
+            elif overall_min == min13:
+                min_idx = np.argmin(dist13)
+                pair = "Body 1 (Red) & Body 3 (Lime)"
+            else:
+                min_idx = np.argmin(dist23)
+                pair = "Body 2 (Cyan) & Body 3 (Lime)"
+
+            min_time = time_steps[min_idx]
+
+            st.info(f"**Closest Encounter:** {pair} came within `{overall_min:.6e}` units of each other on **Day {min_time:.2f}**.")
+            
+            if overall_min < epsilon:
+                st.error(f"⚠️ **Numerical Collision!** Bodies passed closer than the Softening Factor (ε = {epsilon}). The energy calculations at Day {min_time:.2f} are likely unstable.")
+            else:
+                st.success("✅ Minimum distance remained larger than the Softening Factor. Physics are bounded.")
