@@ -9,7 +9,7 @@ This Streamlit-based dashboard serves as a computational sandbox for simulating 
 Core Logic: Uses the **Escape Time Algorithm** to map the boundary of stability in the complex plane. This module explores how simple quadratic iterations generate infinite, self-similar fractal structures.
 
 ### 2. Stochastic Polymer Growth (Statistical Complexity)
-Core Logic: While traditional chaos is deterministic, this module explores Statistical Chaos. It uses random walks to demonstrate how microscopic uncertainty (entropy) leads to macroscopic scaling laws in polymer chains.
+Core Logic: While traditional chaos is deterministic, this module explores **Statistical Chaos**. It uses random walks to demonstrate how microscopic uncertainty (entropy) leads to macroscopic scaling laws in polymer chains.
 
 ### 3. Three-Body Orbit: Gravitational Instability
 
