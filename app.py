@@ -6,7 +6,8 @@ import numpy as np
 # If this fails, make sure you created 'simulations/__init__.py'
 from simulations import fractal
 from simulations import polymer
-from simulations import gravity 
+from simulations import gravity
+from simulations import pendulum 
 
 # 1. Page Config
 st.set_page_config(page_title="Stochastic Physics", layout="wide")
@@ -14,7 +15,7 @@ st.set_page_config(page_title="Stochastic Physics", layout="wide")
 # 2. Sidebar Navigation
 st.sidebar.title("Physics Dashboard")
 app_mode = st.sidebar.selectbox("Choose Simulation", 
-    ["Mandelbrot Explorer", "Polymer Simulator", "Three-Body Gravitation"])
+    ["Mandelbrot Explorer", "Polymer Simulator", "Three-Body Gravitation", "Double Pendulum"])
 
 # --- MODE 1: FRACTALS (The Chaos Engine) ---
 if app_mode == "Mandelbrot Explorer":
@@ -432,3 +433,378 @@ elif app_mode == "Three-Body Gravitation":
                 st.error(f"⚠️ **Numerical Collision!** Bodies passed closer than the Softening Factor (ε = {epsilon}). The energy calculations at Day {min_time:.2f} are likely unstable.")
             else:
                 st.success("✅ Minimum distance remained larger than the Softening Factor. Physics are bounded.")
+
+# --- MODE 4: DOUBLE PENDULUM ---
+elif app_mode == "Double Pendulum":
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    st.title("Double Pendulum: Hamiltonian Chaos")
+    st.markdown(
+        "Two linked pendulums governed by coupled nonlinear ODEs derived from the **Lagrangian (T − V)**. "
+        "A classic demonstration of **sensitive dependence on initial conditions** — "
+        "infinitesimal differences in starting angle produce wildly divergent trajectories."
+    )
+
+    # --- SESSION STATE INIT ---
+    if "dp_result" not in st.session_state:
+        st.session_state.dp_result = None
+
+    # --- SIDEBAR CONTROLS ---
+    st.sidebar.subheader("Simulation Settings")
+    t_max = st.sidebar.slider("Simulation Time (s)", 5, 60, 20)
+    num_steps = st.sidebar.slider("Integration Steps", 1000, 20000, 5000, step=500)
+    trail_frac = st.sidebar.slider("Trail Length (%)", 10, 100, 40)
+
+    # --- PARAMETER GRID ---
+    st.subheader("Initial Conditions")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**Pendulum 1**")
+        m1 = st.slider("Mass 1 (kg)", 0.1, 5.0, 1.0, step=0.1)
+        l1 = st.slider("Length 1 (m)", 0.1, 3.0, 1.0, step=0.1)
+        theta1_deg = st.slider("Initial Angle θ₁ (°)", -180, 180, 120)
+        omega1 = st.slider("Initial Angular Velocity ω₁ (rad/s)", -5.0, 5.0, 0.0, step=0.1)
+
+    with col2:
+        st.markdown("**Pendulum 2**")
+        m2 = st.slider("Mass 2 (kg)", 0.1, 5.0, 1.0, step=0.1)
+        l2 = st.slider("Length 2 (m)", 0.1, 3.0, 1.0, step=0.1)
+        theta2_deg = st.slider("Initial Angle θ₂ (°)", -180, 180, 120)
+        omega2 = st.slider("Initial Angular Velocity ω₂ (rad/s)", -5.0, 5.0, 0.0, step=0.1)
+
+    g = 9.81  # Fixed — not a tunable parameter
+
+    # --- CHAOS DEMO TOGGLE ---
+    st.subheader("Chaos Demonstration")
+    show_chaos = st.checkbox(
+        "Show chaos twin (θ₁ + 0.01°)",
+        value=False,
+        help="Runs a second simulation with θ₁ offset by 0.01°. "
+             "Watch identical-looking starts produce completely different trajectories."
+    )
+
+    # --- RUN BUTTON ---
+    if st.button("Run Simulation", type="primary", use_container_width=True):
+        with st.spinner("Integrating equations of motion..."):
+            # Primary simulation
+            t, sol, x1, y1, x2, y2 = pendulum.simulate(
+                theta1_deg, theta2_deg, omega1, omega2,
+                m1, m2, l1, l2, g, t_max, num_steps
+            )
+            energy = pendulum.calculate_energy(sol, m1, m2, l1, l2, g)
+
+            result = {
+                "t": t, "sol": sol,
+                "x1": x1, "y1": y1,
+                "x2": x2, "y2": y2,
+                "energy": energy,
+                "twin": None
+            }
+
+            # Chaos twin simulation (theta1 + 0.01 degrees)
+            if show_chaos:
+                t2, sol2, x1b, y1b, x2b, y2b = pendulum.simulate(
+                    theta1_deg + 0.01, theta2_deg, omega1, omega2,
+                    m1, m2, l1, l2, g, t_max, num_steps
+                )
+                result["twin"] = {"x1": x1b, "y1": y1b, "x2": x2b, "y2": y2b, "sol": sol2}
+
+            st.session_state.dp_result = result
+
+ # ================================================================
+# REPLACE EVERYTHING FROM:
+#   "# --- DISPLAY RESULTS ---"
+# TO THE END OF THE ELIF BLOCK WITH THIS
+# ================================================================
+
+    # --- DISPLAY RESULTS ---
+    if st.session_state.dp_result is not None:
+        r      = st.session_state.dp_result
+        t      = r["t"]
+        sol    = r["sol"]
+        x1, y1 = r["x1"], r["y1"]
+        x2, y2 = r["x2"], r["y2"]
+        energy = r["energy"]
+
+        # Trail window (shared across all tabs)
+        trail_len   = max(10, int(len(t) * trail_frac / 100))
+        start       = max(0, len(t) - trail_len)
+        render_step = max(1, trail_len // 3000)
+
+        xs1 = x1[start::render_step]
+        ys1 = y1[start::render_step]
+        xs2 = x2[start::render_step]
+        ys2 = y2[start::render_step]
+
+        total_reach = l1 + l2
+
+        # ── TABS ──────────────────────────────────────────────────────
+        tab_anim, tab_trail, tab_energy = st.tabs(
+            ["🎬 Animation", "📊 Trail & Phase Space", "⚡ Energy"]
+        )
+
+        # ══════════════════════════════════════════════════════════════
+        # TAB 1 — ANIMATION
+        # ══════════════════════════════════════════════════════════════
+        with tab_anim:
+            st.caption(
+                "Tip: hit ▶ Play. Use the slider to scrub. "
+                "Trail shows the last 15% of each frame's history."
+            )
+
+            MAX_FRAMES  = 300
+            frame_step  = max(1, len(t) // MAX_FRAMES)
+            frame_idx   = np.arange(0, len(t), frame_step)
+            num_frames  = len(frame_idx)
+            anim_trail  = max(5, num_frames // 7)  # ~15% of total frames
+
+            # Build pivot → m1 → m2 arm geometry per frame
+            def arm_trace(fi):
+                i = frame_idx[fi]
+                return go.Scatter(
+                    x=[0, x1[i], x2[i]],
+                    y=[0, y1[i], y2[i]],
+                    mode="lines+markers",
+                    line=dict(color="white", width=2),
+                    marker=dict(
+                        size=[5, 12, 12],
+                        color=["white", "cyan", "red"]
+                    ),
+                    name="Arms",
+                    showlegend=False
+                )
+
+            def trail_trace(fi, xi, yi, color, name):
+                t_start = max(0, frame_idx[max(0, fi - anim_trail)])
+                t_end   = frame_idx[fi] + 1
+                return go.Scatter(
+                    x=xi[t_start:t_end],
+                    y=yi[t_start:t_end],
+                    mode="lines",
+                    line=dict(color=color, width=1.5),
+                    opacity=0.6,
+                    name=name,
+                    showlegend=False
+                )
+
+            # Initial frame data
+            init_data = [
+                trail_trace(0, x2, y2, "red",  "M2 trail"),
+                trail_trace(0, x1, y1, "cyan", "M1 trail"),
+                arm_trace(0),
+            ]
+
+            # Chaos twin traces (if present)
+            twin = r.get("twin")
+            if twin:
+                init_data.append(go.Scatter(
+                    x=twin["x2"][0:1], y=twin["y2"][0:1],
+                    mode="lines",
+                    line=dict(color="orange", width=1, dash="dot"),
+                    name="Twin M2",
+                    showlegend=False
+                ))
+
+            # Build frames
+            frames = []
+            for fi in range(num_frames):
+                frame_traces = [
+                    trail_trace(fi, x2, y2, "red",  "M2 trail"),
+                    trail_trace(fi, x1, y1, "cyan", "M1 trail"),
+                    arm_trace(fi),
+                ]
+                if twin:
+                    t_start = max(0, frame_idx[max(0, fi - anim_trail)])
+                    t_end   = frame_idx[fi] + 1
+                    frame_traces.append(go.Scatter(
+                        x=twin["x2"][t_start:t_end],
+                        y=twin["y2"][t_start:t_end],
+                        mode="lines",
+                        line=dict(color="orange", width=1, dash="dot"),
+                        showlegend=False
+                    ))
+
+                frames.append(go.Frame(
+                    data=frame_traces,
+                    name=str(fi),
+                    layout=go.Layout(
+                        title_text=f"t = {t[frame_idx[fi]]:.2f}s"
+                    )
+                ))
+
+            # Play / Pause buttons
+            updatemenus = [dict(
+                type="buttons",
+                showactive=False,
+                y=1.05, x=0.0, xanchor="left",
+                buttons=[
+                    dict(label="▶ Play",  method="animate",
+                         args=[None, dict(frame=dict(duration=33, redraw=True),
+                                          fromcurrent=True, mode="immediate")]),
+                    dict(label="⏸ Pause", method="animate",
+                         args=[[None], dict(frame=dict(duration=0, redraw=False),
+                                            mode="immediate")])
+                ]
+            )]
+
+            # Time scrub slider
+            sliders = [dict(
+                steps=[dict(method="animate", args=[[str(fi)],
+                            dict(mode="immediate", frame=dict(duration=0, redraw=True))],
+                            label=f"{t[frame_idx[fi]]:.1f}s")
+                       for fi in range(0, num_frames, max(1, num_frames // 20))],
+                x=0.0, y=0,
+                len=1.0,
+                currentvalue=dict(prefix="Time: ", visible=True, xanchor="center"),
+                transition=dict(duration=0)
+            )]
+
+            fig_anim = go.Figure(
+                data=init_data,
+                frames=frames,
+                layout=go.Layout(
+                    template="plotly_dark",
+                    height=540,
+                    margin=dict(l=0, r=0, b=60, t=40),
+                    xaxis=dict(range=[-(total_reach + 0.2), total_reach + 0.2],
+                               scaleanchor="y", scaleratio=1,
+                               showgrid=False, zeroline=False),
+                    yaxis=dict(range=[-(total_reach + 0.2), total_reach + 0.2],
+                               showgrid=False, zeroline=False),
+                    updatemenus=updatemenus,
+                    sliders=sliders,
+                    hovermode=False
+                )
+            )
+
+            st.plotly_chart(fig_anim, use_container_width=True)
+
+        # ══════════════════════════════════════════════════════════════
+        # TAB 2 — TRAIL & PHASE SPACE
+        # ══════════════════════════════════════════════════════════════
+        with tab_trail:
+            phase_mode = st.radio(
+                "Phase Space View",
+                ["Unwrapped (θ₁ vs θ₂)", "Wrapped [-180°, 180°]", "Poincaré (ω₁ vs θ₁)"],
+                horizontal=True
+            )
+
+            col_trail, col_phase = st.columns([0.55, 0.45])
+
+            # ── Cartesian Trail (left) ──
+            with col_trail:
+                fig_trail = go.Figure()
+
+                fig_trail.add_trace(go.Scatter(
+                    x=xs1, y=ys1, mode="lines",
+                    line=dict(color="cyan", width=1),
+                    name="Mass 1", opacity=0.5
+                ))
+                fig_trail.add_trace(go.Scatter(
+                    x=xs2, y=ys2, mode="lines",
+                    line=dict(color="red", width=1.5),
+                    name="Mass 2"
+                ))
+                # Current arm position
+                fig_trail.add_trace(go.Scatter(
+                    x=[0, x1[-1], x2[-1]],
+                    y=[0, y1[-1], y2[-1]],
+                    mode="lines+markers",
+                    line=dict(color="white", width=2),
+                    marker=dict(size=[5, 10, 10], color=["white", "cyan", "red"]),
+                    showlegend=False
+                ))
+                # Chaos twin
+                if twin:
+                    fig_trail.add_trace(go.Scatter(
+                        x=twin["x2"][start::render_step],
+                        y=twin["y2"][start::render_step],
+                        mode="lines",
+                        line=dict(color="orange", width=1, dash="dot"),
+                        name="Twin M2 (θ₁+0.01°)", opacity=0.7
+                    ))
+
+                fig_trail.update_layout(
+                    template="plotly_dark", height=460,
+                    title="Cartesian Trail",
+                    margin=dict(l=0, r=0, b=0, t=40),
+                    xaxis=dict(range=[-(total_reach+0.2), total_reach+0.2],
+                               scaleanchor="y", scaleratio=1),
+                    yaxis=dict(range=[-(total_reach+0.2), total_reach+0.2]),
+                    hovermode=False
+                )
+                st.plotly_chart(fig_trail, use_container_width=True)
+
+            # ── Phase Space (right) ──
+            with col_phase:
+                fig_phase = go.Figure()
+
+                if phase_mode == "Unwrapped (θ₁ vs θ₂)":
+                    px = np.degrees(sol[start::render_step, 0])
+                    py = np.degrees(sol[start::render_step, 2])
+                    xlabel, ylabel = "θ₁ (degrees, unwrapped)", "θ₂ (degrees, unwrapped)"
+                    title = "Phase Space — Unwrapped"
+
+                elif phase_mode == "Wrapped [-180°, 180°]":
+                    px = (np.degrees(sol[start::render_step, 0]) + 180) % 360 - 180
+                    py = (np.degrees(sol[start::render_step, 2]) + 180) % 360 - 180
+                    xlabel, ylabel = "θ₁ (degrees)", "θ₂ (degrees)"
+                    title = "Phase Space — Wrapped (Toroidal)"
+
+                else:  # Poincaré
+                    px = (np.degrees(sol[start::render_step, 0]) + 180) % 360 - 180
+                    py = np.degrees(sol[start::render_step, 1])  # ω₁ in rad/s
+                    xlabel, ylabel = "θ₁ (degrees)", "ω₁ (rad/s)"
+                    title = "Poincaré Portrait — ω₁ vs θ₁"
+
+                fig_phase.add_trace(go.Scatter(
+                    x=px, y=py, mode="lines",
+                    line=dict(color="violet", width=0.8),
+                    opacity=0.85, name=title
+                ))
+
+                if twin and phase_mode == "Poincaré (ω₁ vs θ₁)":
+                    px_tw = (np.degrees(twin["sol"][start::render_step, 0]) + 180) % 360 - 180
+                    py_tw = np.degrees(twin["sol"][start::render_step, 1])
+                    fig_phase.add_trace(go.Scatter(
+                        x=px_tw, y=py_tw, mode="lines",
+                        line=dict(color="orange", width=0.8, dash="dot"),
+                        opacity=0.7, name="Twin"
+                    ))
+
+                fig_phase.update_layout(
+                    template="plotly_dark", height=460,
+                    title=title,
+                    margin=dict(l=0, r=0, b=0, t=40),
+                    xaxis_title=xlabel,
+                    yaxis_title=ylabel,
+                    hovermode=False
+                )
+                st.plotly_chart(fig_phase, use_container_width=True)
+
+        # ══════════════════════════════════════════════════════════════
+        # TAB 3 — ENERGY
+        # ══════════════════════════════════════════════════════════════
+        with tab_energy:
+            energy_drift = float(np.max(energy) - np.min(energy))
+            energy_pct   = abs(energy_drift / energy[0]) * 100 if energy[0] != 0 else 0.0
+
+            ec1, ec2, ec3 = st.columns(3)
+            ec1.metric("Initial Energy (J)", f"{energy[0]:.4f}")
+            ec2.metric("Energy Drift (J)",   f"{energy_drift:.2e}")
+            ec3.metric("Drift (%)",          f"{energy_pct:.4f}%")
+
+            if energy_pct < 0.01:
+                st.success("✅ Energy well-conserved. Integration is numerically stable.")
+            elif energy_pct < 0.1:
+                st.warning("⚠️ Mild energy drift. Consider increasing integration steps.")
+            else:
+                st.error("❌ Significant energy drift. Increase steps or reduce simulation time.")
+
+            energy_render = max(1, len(t) // 3000)
+            st.line_chart(
+                {"Time (s)": t[::energy_render], "Total Energy (J)": energy[::energy_render]},
+                x="Time (s)", y="Total Energy (J)"
+            )
