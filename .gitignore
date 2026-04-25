@@ -1,3 +1,6 @@
 venv/
 **/__pycache__/
 *.pyc
+# Ignore intermediary fractal render frames
+fractal-explorer/temp_frames/
+fractal-explorer/zoom_frames/
