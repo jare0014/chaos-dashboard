@@ -1,22 +1,20 @@
 import numpy as np
-from scipy.integrate import odeint 
 from scipy.integrate import solve_ivp
 
 # Gravitational Constant
 G = 1.0 
 
-def three_body_equations(state, t, m1, m2, m3, epsilon):
+def three_body_equations(t, state, m1, m2, m3, epsilon):
     """
     The core physics engine.
-    'state' is an array of 18 numbers:
-    [x1, y1, z1, x2, y2, z2, x3, y3, z3, vx1, vy1, vz1, vx2, vy2, vz2, vx3, vy3, vz3]
+    Note: 't' and 'state' are swapped to comply with solve_ivp.
     """
     # 1. UNPACK POSITIONS
     r1 = state[0:3]
     r2 = state[3:6]
     r3 = state[6:9]
     
-    # 2. UNPACK VELOCITIES (The first half of our derivatives!)
+    # 2. UNPACK VELOCITIES
     v1 = state[9:12]
     v2 = state[12:15]
     v3 = state[15:18]
@@ -26,13 +24,12 @@ def three_body_equations(state, t, m1, m2, m3, epsilon):
     r13 = r3 - r1
     r23 = r3 - r2
     
-    # Calculate magnitudes (adding a tiny number to prevent divide-by-zero crashes)
+    # Calculate magnitudes 
     norm_r12 = np.linalg.norm(r12) + epsilon
     norm_r13 = np.linalg.norm(r13) + epsilon
     norm_r23 = np.linalg.norm(r23) + epsilon
     
-    # 4. CALCULATE ACCELERATIONS (The second half of our derivatives!)
-    # F = G * m1 * m2 / r^3 * vector_r  =>  a = F / m
+    # 4. CALCULATE ACCELERATIONS
     a1 = G * m2 * r12 / norm_r12**3 + G * m3 * r13 / norm_r13**3
     a2 = G * m1 * (-r12) / norm_r12**3 + G * m3 * r23 / norm_r23**3
     a3 = G * m1 * (-r13) / norm_r13**3 + G * m2 * (-r23) / norm_r23**3
@@ -44,15 +41,27 @@ def three_body_equations(state, t, m1, m2, m3, epsilon):
 
 def simulate_orbit(initial_state, t_max, num_steps, masses, epsilon):
     """
-    Hands the equations to the Scipy solver and returns the history.
+    Hands the equations to the Scipy DOP853 solver for high-precision integration.
     """
-    t = np.linspace(0, t_max, num_steps)
+    t_eval = np.linspace(0, t_max, num_steps)
     m1, m2, m3 = masses
     
-    # Scipy integrates the derivatives over time t
-    solution = odeint(three_body_equations, initial_state, t, args=(m1, m2, m3, epsilon))
+    # Execute high-order Runge-Kutta integration with tight tolerances
+    sol = solve_ivp(
+        fun=three_body_equations, 
+        t_span=(0, t_max), 
+        y0=initial_state, 
+        method='DOP853',     # High-precision solver
+        t_eval=t_eval,
+        args=(m1, m2, m3, epsilon),
+        rtol=1e-12,          # Strict relative tolerance 
+        atol=1e-12           # Strict absolute tolerance 
+    )
     
-    return solution, t
+    # solve_ivp returns the array transposed (18, Steps) compared to odeint.
+    # We transpose it back to (Steps, 18) so your UI charting and energy functions don't break.
+    return sol.y.T, t_eval
+
 def calculate_energy(solution, masses, epsilon):
     m1, m2, m3 = masses
     # solution is (Steps, 18). Extract positions and velocities

@@ -15,7 +15,7 @@ st.set_page_config(page_title="Stochastic Physics", layout="wide")
 # 2. Sidebar Navigation
 st.sidebar.title("Physics Dashboard")
 app_mode = st.sidebar.selectbox("Choose Simulation", 
-    ["Mandelbrot Explorer", "Polymer Simulator", "Three-Body Gravitation", "Double Pendulum"])
+    ["Mandelbrot Explorer", "Mandelbrot Deep Dive", "Polymer Simulator", "Three-Body Gravitation", "Double Pendulum"])
 
 # --- MODE 1: FRACTALS (The Chaos Engine) ---
 if app_mode == "Mandelbrot Explorer":
@@ -67,7 +67,85 @@ if app_mode == "Mandelbrot Explorer":
             # 'use_column_width=False' ensures it doesn't get squished.
             # You will see a scrollbar if the image is wider than the screen.
             st.image(colored_img, caption=f"Resolution: {w}x{h}", use_container_width=False)
+# --- MODE 1.5: FRACTAL DEEP DIVE (Write-up & Gallery) ---
+elif app_mode == "Mandelbrot Deep Dive":
+    import os
+    import re
+    
+    # 1. Load the Markdown Write-up
+    readme_path = os.path.join("fractal_explorer", "README.md")
+    
+    if os.path.exists(readme_path):
+        with open(readme_path, "r", encoding="utf-8") as f:
+            raw_text = f.read()
+            
+            # 2. Regex to find standard Markdown images: ![alt text](path)
+            pattern = r'!\[(.*?)\]\((.*?)\)'
+            
+            last_end = 0
+            
+            # 3. Interleave st.markdown and st.image
+            for match in re.finditer(pattern, raw_text):
+                # Render the text chunk before the image
+                text_chunk = raw_text[last_end:match.start()]
+                if text_chunk.strip():
+                    st.markdown(text_chunk)
+                    
+                # Extract image details
+                alt_text = match.group(1)
+                img_path = match.group(2)
+                
+                # The markdown path is likely relative to the fractal_explorer folder
+                # e.g., "assets/mandelbrot.png" needs to be "fractal_explorer/assets/mandelbrot.png"
+                full_img_path = os.path.join("fractal_explorer", img_path)
+                
+                if os.path.exists(full_img_path):
+                    st.image(full_img_path, caption=alt_text)
+                else:
+                    st.warning(f"[Missing Image: {img_path}]")
+                    
+                last_end = match.end()
+                
+            # 4. Render any remaining text after the final image
+            remaining_text = raw_text[last_end:]
+            if remaining_text.strip():
+                st.markdown(remaining_text)
+                
+    else:
+        st.error(f"Could not find {readme_path}. Ensure you are running Streamlit from the root repository folder.")
 
+    st.divider()
+    
+    # 2. Display the Media Assets explicitly
+    st.subheader("Highlighted Visuals")
+    
+    # Using tabs to keep the UI clean since you have a lot of assets
+    tab1, tab2, tab3 = st.tabs(["High-Res Renders", "Animations", "Julia Sets"])
+    
+    with tab1:
+        colA, colB = st.columns(2)
+        with colA:
+            st.image("fractal_explorer/assets/Mandelbrot_Master_Print.png", caption="Master Print")
+            st.image("fractal_explorer/assets/mandelbrot_elephant.png", caption="Elephant Valley")
+        with colB:
+            st.image("fractal_explorer/assets/mandelbrot_seahorse.png", caption="Seahorse Valley")
+            st.image("fractal_explorer/assets/mandelbrot_vacuum.png", caption="The Vacuum")
+            
+    with tab2:
+        colC, colD = st.columns(2)
+        with colC:
+            st.image("fractal_explorer/assets/mandelbrot_flight.gif", caption="Fractal Flight")
+        with colD:
+            st.image("fractal_explorer/assets/mandelbrot_scan.gif", caption="Depth Scan")
+            
+    with tab3:
+        colE, colF = st.columns(2)
+        with colE:
+            st.image("fractal_explorer/assets/julia_exterior.png", caption="Julia Exterior")
+            st.image("fractal_explorer/assets/julia_interior.png", caption="Julia Interior")
+        with colF:
+            st.image("fractal_explorer/assets/julia_seahorse.png", caption="Julia Seahorse")
+            st.image("fractal_explorer/assets/julia_morph_final.gif", caption="Julia Morph Sequence")
 # --- MODE 2: POLYMERS (The Stochastic Engine) ---
 elif app_mode == "Polymer Simulator":
     st.title("Polymer Chain Physics")
@@ -168,17 +246,17 @@ elif app_mode == "Three-Body Gravitation":
     st.title("Three-Body Orbital Mechanics")
     st.markdown("A brute-force numerical integration of Newton's Law of Universal Gravitation.")
 
-    # --- PRESETS DICTIONARY ---
+# --- PRESETS DICTIONARY ---
     presets = {
         "Default (Randomized Slingshot)": [
-            1.0, 1.0, 1.0,  # Masses (m1, m2, m3)
-            -1.0, 0.0, 0.0,  1.0, 0.0, 0.0,  0.0, 1.0, 0.0, # Positions (x,y,z) x 3
-            0.0, -0.5, 0.0,  0.0, 0.5, 0.0,  0.5, 0.0, 0.0  # Velocities (vx,vy,vz) x 3
+            1.0, 1.0, 1.0,  
+            -1.0, 0.0, 0.0,  1.0, 0.0, 0.0,  0.0, 1.0, 0.0, 
+            0.0, -0.5, 0.0,  0.0, 0.5, 0.0,  0.5, 0.0, 0.0  
         ],
         "The Figure-8 (Stable)": [
             1.0, 1.0, 1.0, 
-            0.97000436, -0.24308753, 0.0,  -0.97000436, 0.24308753, 0.0,  0.0, 0.0, 0.0,
-            -0.46620368, -0.43236573, 0.0,  -0.46620368, -0.43236573, 0.0,  0.93240737, 0.86473146, 0.0
+            0.97000436000000, -0.24308753000000, 0.0,  -0.97000436000000, 0.24308753000000, 0.0,  0.0, 0.0, 0.0,
+            -0.46620368500000, -0.43236573000000, 0.0,  -0.46620368500000, -0.43236573000000, 0.0,  0.93240737000000, 0.86473146000000, 0.0
         ]
     }
 
@@ -189,7 +267,8 @@ elif app_mode == "Three-Body Gravitation":
     # If the user hasn't loaded the page yet, give them the default numbers
     if "gravity_state" not in st.session_state:
         st.session_state.gravity_state = presets["Default (Randomized Slingshot)"]
-
+        st.session_state.v_scale = 1.0 
+        st.session_state.gravity_result = None 
     def load_preset():
         """Callback to overwrite the vault and force-update individual widget keys"""
         choice = st.session_state.preset_choice
@@ -229,9 +308,9 @@ elif app_mode == "Three-Body Gravitation":
             st.session_state[f"z_{i}"] = float(np.random.uniform(-2.0, 2.0))
             
             # Velocities: Slower to prevent instant ejections (-0.1 to 0.1)
-            st.session_state[f"vx_{i}"] = float(np.random.uniform(-0.1, 0.1)) 
-            st.session_state[f"vy_{i}"] = float(np.random.uniform(-0.1, 0.1)) 
-            st.session_state[f"vz_{i}"] = float(np.random.uniform(-0.1, 0.1))
+            st.session_state[f"vx_{i}"] = float(np.random.uniform(-0.1, 0.1)) * v_mult
+            st.session_state[f"vy_{i}"] = float(np.random.uniform(-0.1, 0.1)) * v_mult
+            st.session_state[f"vz_{i}"] = float(np.random.uniform(-0.1, 0.1)) * v_mult
     def adjust_v_plus():
         st.session_state.v_scale = round(min(2.0, st.session_state.v_scale + 0.01), 2)
 
@@ -276,9 +355,9 @@ elif app_mode == "Three-Body Gravitation":
     with colE: # New column for epsilon
         epsilon = st.slider(
             "Softening Factor (ε)", 
-            min_value=1e-8, 
+            min_value=0.0, 
             max_value=1.0,    # Increased max so you can actually feel the "squishiness"
-            value=1e-4,       # Start at a visible value
+            value=0.0,       # Start at a visible value
             step=1e-5,        # Explicitly set the step size
             format="%.2e",    # Use scientific notation to see the precision
             key="epsilon"
@@ -303,17 +382,17 @@ elif app_mode == "Three-Body Gravitation":
     for i in range(3):
         with cols[i]:
             st.markdown(f"**{bodies[i]}**")
-            m = st.number_input("Mass", key=f"m_{i}", format="%.8f")
+            m = st.number_input("Mass", key=f"m_{i}", format="%.14f")
             
             st.caption("Position (x, y, z)")
-            x = st.number_input("X", key=f"x_{i}", format="%.8f")
-            y = st.number_input("Y", key=f"y_{i}", format="%.8f")
-            z = st.number_input("Z", key=f"z_{i}", format="%.8f")
+            x = st.number_input("X", key=f"x_{i}", format="%.14f")
+            y = st.number_input("Y", key=f"y_{i}", format="%.14f")
+            z = st.number_input("Z", key=f"z_{i}", format="%.14f")
             
             st.caption("Velocity (vx, vy, vz)")
-            vx = st.number_input("Vx", key=f"vx_{i}", format="%.8f")
-            vy = st.number_input("Vy", key=f"vy_{i}", format="%.8f")
-            vz = st.number_input("Vz", key=f"vz_{i}", format="%.8f")
+            vx = st.number_input("Vx", key=f"vx_{i}", format="%.14f")
+            vy = st.number_input("Vy", key=f"vy_{i}", format="%.14f")
+            vz = st.number_input("Vz", key=f"vz_{i}", format="%.14f")
             
             # Store the user's current inputs back into a list
             new_state.append((m, x, y, z, vx, vy, vz))
@@ -340,100 +419,130 @@ elif app_mode == "Three-Body Gravitation":
             num_steps_sim = int(t_max * steps_per_day)
             
             # 2. RUN SIMULATION
-            # Note: Ensure gravity.simulate_orbit returns (solution, time_steps)
             solution, time_steps = gravity.simulate_orbit(
                 user_initial_state, t_max, num_steps_sim, user_masses, epsilon
             )
             
             total_energy = gravity.calculate_energy(solution, user_masses, epsilon)
 
-            # --- OPTIMIZED VISUALIZATION ---
-            import plotly.graph_objects as go
-            
-            points_per_day = num_steps_sim / t_max
-            actual_trail_size = int(trail_size * points_per_day)
-            start_idx = max(0, num_steps_sim - actual_trail_size)
-
-            # Define render_step ONCE here so it's available for both charts
-            render_step = max(1, actual_trail_size // max_render_points)
-
-            fig = go.Figure()
-            colors = ['red', 'cyan', 'lime']
-            
-            for i in range(3):
-                idx = i * 3
-                x = solution[start_idx::render_step, idx]
-                y = solution[start_idx::render_step, idx + 1]
-                z = solution[start_idx::render_step, idx + 2]
-                
-                fig.add_trace(go.Scatter3d(
-                    x=x, y=y, z=z,
-                    mode='lines',
-                    line=dict(width=3, color=colors[i]),
-                    name=f'Body {i+1}'
-                ))
-                
-                fig.add_trace(go.Scatter3d(
-                    x=[solution[-1, idx]], y=[solution[-1, idx+1]], z=[solution[-1, idx+2]],
-                    mode='markers',
-                    marker=dict(size=6, color=colors[i]),
-                    showlegend=False
-                ))
-
-            fig.update_layout(
-                template="plotly_dark",
-                margin=dict(l=0, r=0, b=0, t=0),
-                scene=dict(aspectmode='cube'),
-                hovermode=False
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            # --- TIME-INDEXED ENERGY CHART ---
-            st.divider()
-            st.subheader("🚀 System Stability (Total Energy)")
-            
-            energy_data = {
-                "Time (Days)": time_steps[::render_step],
-                "Total Energy": total_energy[::render_step]
+            # 3. STORE RESULTS
+            st.session_state.gravity_result = {
+                "solution": solution,
+                "time_steps": time_steps,
+                "total_energy": total_energy,
+                "num_steps_sim": num_steps_sim,
+                "sim_t_max": t_max
             }
-            st.line_chart(energy_data, x="Time (Days)", y="Total Energy")
 
-            # --- SIMULATION LOG & COLLISION DETECTOR ---
-            # Now acting as the final "Diagnostic Footer"
-            st.divider()
-            st.subheader("📡 Simulation Log")
+    # --- DISPLAY RESULTS (Rendered independently of the button) ---
+    if st.session_state.gravity_result is not None:
+        r = st.session_state.gravity_result
+        solution = r["solution"]
+        time_steps = r["time_steps"]
+        total_energy = r["total_energy"]
+        num_steps_sim = r["num_steps_sim"]
+        sim_t_max = r["sim_t_max"]
+
+        # --- OPTIMIZED VISUALIZATION ---
+        import plotly.graph_objects as go
+        
+        points_per_day = num_steps_sim / sim_t_max
+        actual_trail_size = int(trail_size * points_per_day)
+        start_idx = max(0, num_steps_sim - actual_trail_size)
+
+        render_step = max(1, actual_trail_size // max_render_points)
+# --- STROBOSCOPIC ALIASING DETECTOR ---
+        # Theoretical period of the Figure-8 orbit (for G=1, m=1)
+        FIGURE_8_PERIOD = 6.32591398 
+        
+        # Calculate the actual time elapsed between drawn points
+        dt_sample = render_step / steps_per_day
+        
+        # Calculate how many orbital periods fit into one render step
+        phase_ratio = dt_sample / FIGURE_8_PERIOD
+        
+        # Check how close the ratio is to a whole integer (modulo 1)
+        # If the remainder is very close to 0 or 1, we are in a resonance band
+        phase_remainder = phase_ratio % 1.0
+        
+        # Define a tolerance threshold (e.g., within 2% of perfect synchronization)
+        if phase_remainder < 0.02 or phase_remainder > 0.98:
+            st.warning(f"⚠️ **Temporal Aliasing Detected:** Your rendering stride (`{render_step}` steps) perfectly synchronizes with the orbital period. The visual output is stroboscopic and may mask true numerical drift.")
+        fig = go.Figure()
+        colors = ['red', 'cyan', 'lime']
+        
+        for i in range(3):
+            idx = i * 3
+            x = solution[start_idx::render_step, idx]
+            y = solution[start_idx::render_step, idx + 1]
+            z = solution[start_idx::render_step, idx + 2]
             
-            pos1 = solution[:, 0:3]
-            pos2 = solution[:, 3:6]
-            pos3 = solution[:, 6:9]
-
-            dist12 = np.linalg.norm(pos1 - pos2, axis=1)
-            dist13 = np.linalg.norm(pos1 - pos3, axis=1)
-            dist23 = np.linalg.norm(pos2 - pos3, axis=1)
-
-            min12, min13, min23 = np.min(dist12), np.min(dist13), np.min(dist23)
-            overall_min = min(min12, min13, min23)
-
-            if overall_min == min12:
-                min_idx = np.argmin(dist12)
-                pair = "Body 1 (Red) & Body 2 (Cyan)"
-            elif overall_min == min13:
-                min_idx = np.argmin(dist13)
-                pair = "Body 1 (Red) & Body 3 (Lime)"
-            else:
-                min_idx = np.argmin(dist23)
-                pair = "Body 2 (Cyan) & Body 3 (Lime)"
-
-            min_time = time_steps[min_idx]
-
-            st.info(f"**Closest Encounter:** {pair} came within `{overall_min:.6e}` units of each other on **Day {min_time:.2f}**.")
+            fig.add_trace(go.Scatter3d(
+                x=x, y=y, z=z,
+                mode='lines',
+                line=dict(width=3, color=colors[i]),
+                name=f'Body {i+1}'
+            ))
             
-            if overall_min < epsilon:
-                st.error(f"⚠️ **Numerical Collision!** Bodies passed closer than the Softening Factor (ε = {epsilon}). The energy calculations at Day {min_time:.2f} are likely unstable.")
-            else:
-                st.success("✅ Minimum distance remained larger than the Softening Factor. Physics are bounded.")
+            fig.add_trace(go.Scatter3d(
+                x=[solution[-1, idx]], y=[solution[-1, idx+1]], z=[solution[-1, idx+2]],
+                mode='markers',
+                marker=dict(size=6, color=colors[i]),
+                showlegend=False
+            ))
 
+        fig.update_layout(
+            template="plotly_dark",
+            margin=dict(l=0, r=0, b=0, t=0),
+            scene=dict(aspectmode='cube'),
+            hovermode=False
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # --- TIME-INDEXED ENERGY CHART ---
+        st.divider()
+        st.subheader("🚀 System Stability (Total Energy)")
+        
+        energy_data = {
+            "Time (Days)": time_steps[::render_step],
+            "Total Energy": total_energy[::render_step]
+        }
+        st.line_chart(energy_data, x="Time (Days)", y="Total Energy")
+
+        # --- SIMULATION LOG & COLLISION DETECTOR ---
+        st.divider()
+        st.subheader("📡 Simulation Log")
+        
+        pos1 = solution[:, 0:3]
+        pos2 = solution[:, 3:6]
+        pos3 = solution[:, 6:9]
+
+        dist12 = np.linalg.norm(pos1 - pos2, axis=1)
+        dist13 = np.linalg.norm(pos1 - pos3, axis=1)
+        dist23 = np.linalg.norm(pos2 - pos3, axis=1)
+
+        min12, min13, min23 = np.min(dist12), np.min(dist13), np.min(dist23)
+        overall_min = min(min12, min13, min23)
+
+        if overall_min == min12:
+            min_idx = np.argmin(dist12)
+            pair = "Body 1 (Red) & Body 2 (Cyan)"
+        elif overall_min == min13:
+            min_idx = np.argmin(dist13)
+            pair = "Body 1 (Red) & Body 3 (Lime)"
+        else:
+            min_idx = np.argmin(dist23)
+            pair = "Body 2 (Cyan) & Body 3 (Lime)"
+
+        min_time = time_steps[min_idx]
+
+        st.info(f"**Closest Encounter:** {pair} came within `{overall_min:.6e}` units of each other on **Day {min_time:.2f}**.")
+        
+        if overall_min < epsilon:
+            st.error(f"⚠️ **Numerical Collision!** Bodies passed closer than the Softening Factor (ε = {epsilon}). The energy calculations at Day {min_time:.2f} are likely unstable.")
+        else:
+            st.success("✅ Minimum distance remained larger than the Softening Factor. Physics are bounded.")
 # --- MODE 4: DOUBLE PENDULUM ---
 elif app_mode == "Double Pendulum":
     import plotly.graph_objects as go
