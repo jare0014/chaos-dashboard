@@ -50,3 +50,17 @@ Generating these animations requires calculating billions of non-linear iteratio
 * **JIT Compilation:** Core orbital logic is wrapped in Numba (`@jit(nopython=True)`) to bypass Python's Global Interpreter Lock, allowing for C-level execution speeds during deep zoom calculations.
 * **Dynamic Resolution Scaling:** For the "Infinite Flight," rendering steps are dynamically adjusted based on the zoom factor, prioritizing CPU cycles for regions with the highest phase-space curvature.
 * **Asset Pipeline:** Raw arrays are converted and cached via the `Pillow` library to generate continuous `.gif` loops and high-DPI `.png` prints for portfolio presentation.
+
+---
+
+## 🛠️ Included Explorer Tools
+
+Alongside the interactive Streamlit dashboard, this directory contains standalone local scripts for advanced high-depth analysis.
+
+### Orbital Sonification Engine (`fractal_sonification_explorer.py`)
+Bounded points within the Mandelbrot set eventually fall into stable periodic orbits. This script isolates those orbits, calculates their periodicity, and maps them to audible frequencies using signal processing. 
+* **Usage:** Run locally to input a complex coordinate (e.g., `c = -0.12 + 0.74i`) and generate a `.wav` file of its orbital frequency.
+
+### 4K Batch Renderer (`fractal_renderer.py`)
+A high-performance script stripped of UI overhead, designed purely for deep-zoom data generation. 
+* **Usage:** Configured to push hardware limits using vectorized NumPy arrays to export 3840x2160 resolution maps of user-defined complex boundaries.
