@@ -1,6 +1,5 @@
 # Chaos Dashboard: Computational Physics & Dynamical Systems
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://chaos-dashboard-khpbj6y6jeedqurug9j6m4.streamlit.app/)
 
 A modular, web-based computational physics engine designed to simulate and analyze deterministic chaos, orbital mechanics, and complex fractal geometry. Built with Python and deployed via Streamlit Cloud.
 
