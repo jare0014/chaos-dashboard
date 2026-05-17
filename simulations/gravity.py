@@ -58,8 +58,7 @@ def simulate_orbit(initial_state, t_max, num_steps, masses, epsilon):
         atol=1e-12           # Strict absolute tolerance 
     )
     
-    # solve_ivp returns the array transposed (18, Steps) compared to odeint.
-    # We transpose it back to (Steps, 18) so your UI charting and energy functions don't break.
+    # Transpose back to (Steps, 18) to match the UI expectations
     return sol.y.T, t_eval
 
 def calculate_energy(solution, masses, epsilon):
