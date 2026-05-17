@@ -366,7 +366,13 @@ elif app_mode == "Three-Body Gravitation":
         
         with v_col2:
             # We remove the label here since we wrote it above to save space
-            st.slider("v_slider", 0.0, 2.0, key="v_scale", label_visibility="collapsed")
+            st.slider(
+    "v_slider", 
+    min_value=0.0, 
+    max_value=2.0, 
+    key="v_scale", 
+    label_visibility="collapsed"
+)
         
         with v_col3:
             st.button("➕", on_click=adjust_v_plus, use_container_width=True)
