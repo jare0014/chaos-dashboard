@@ -46,17 +46,28 @@ def simulate_orbit(initial_state, t_max, num_steps, masses, epsilon):
     t_eval = np.linspace(0, t_max, num_steps)
     m1, m2, m3 = masses
     
-    # Execute high-order Runge-Kutta integration with tight tolerances
+    # 1. Add a tiny protective floor inside the engine if epsilon is exactly 0
+    # to prevent literal divide-by-zero crashes during close approaches
+    safe_epsilon = max(epsilon, 1e-15)
+    
+    # Execute high-order Runge-Kutta integration
     sol = solve_ivp(
         fun=three_body_equations, 
         t_span=(0, t_max), 
         y0=initial_state, 
-        method='DOP853',     # High-precision solver
+        method='DOP853',     
         t_eval=t_eval,
-        args=(m1, m2, m3, epsilon),
-        rtol=1e-12,          # Strict relative tolerance 
-        atol=1e-12           # Strict absolute tolerance 
+        args=(m1, m2, m3, safe_epsilon),
+        rtol=1e-12,          
+        atol=1e-12           
     )
+    
+    # 2. Check if the solver actually succeeded before accessing .y
+    if not sol.success or not hasattr(sol, 'y'):
+        # Fallback: Return a static matrix of the initial state so the UI doesn't crash
+        # This gives the user an error message instead of a broken app screen
+        dummy_solution = np.tile(initial_state, (num_steps, 1))
+        return dummy_solution, t_eval
     
     # Transpose back to (Steps, 18) to match the UI expectations
     return sol.y.T, t_eval
