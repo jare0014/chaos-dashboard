@@ -1,5 +1,4 @@
 # Chaos Dashboard: Computational Physics & Dynamical Systems
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
 
 A modular, web-based computational physics engine designed to simulate and analyze deterministic chaos, orbital mechanics, and complex fractal geometry. Built with Python and deployed via Streamlit Cloud.
 
@@ -43,7 +42,7 @@ python -m venv venv
 source venv/bin/activate  # On Windows use: venv\Scripts\activate
 pip install -r requirements.txt
 ```
-3. Launch the Dashboard:
+3. **Launch the Dashboard:**
 
 ```Bash
 streamlit run app.py
