@@ -4,3 +4,7 @@ venv/
 # Ignore intermediary fractal render frames
 fractal-explorer/temp_frames/
 fractal-explorer/zoom_frames/
+# Ignore chatbot discussions
+Chatbot Discussions/
+**/Chatbot Discussions/
+
